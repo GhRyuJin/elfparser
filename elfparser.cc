@@ -10,9 +10,13 @@ Function : parse elf file.
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h> //open
-#include <unistd.h> //read
+#include <unistd.h> //read lseek
 #include <assert.h> //assert
+#include <string.h> //strcat 
 
+/*
+Elf header
+*/
 //EI_CLASS
 const static char* ei_class[] = {"ELFCLASSNONE", "ELFCLASS32", "ELFCLASS64"};
 
@@ -43,8 +47,25 @@ const static char* e_version[] = {"EV_NONE", "EV_CURRENT"};
 const static char* e_shstrndx[] = {"SHN_UNDEF", "SHN_LORESERVE", "SHN_LOPROC", "SHN_HIPROC",
                                     "SHN_ABS", "SHN_COMMON", "SHN_HIRESERVE"};
 
+/*
+program header
+*/
+const static char* p_type[] = {"PT_NULL", "PT_LOAD", "PT_DYNAMIC", "PT_INTERP",
+                                "PT_NOTE", "PT_SHLIB", "PT_PHDR", "PT_LOPROC",
+                                "PT_HIPROC", "PT_GNU_STACK"};
+
+/*
+Section Header
+*/
+const static char* sh_type[] = {"SHT_NULL", "SHT_PROGBITS", "SHT_SYMTAB",
+                                "SHT_STRTAB", "SHT_RELA", "SHT_HASH",
+                                "SHT_DYNAMIC", "SHT_NOTE", "SHT_NOBITS",
+                                "SHT_REL", "SHT_SHLIB", "SHT_DYNSYM",
+                                "SHT_LOPROC", "SHT_HIPROC", "SHT_LOUSER",
+                                "SHT_HIUSER"};
+
 void 
-read_elf_phdr(int fd, Elf64_Ehdr* hdr)
+read_elf_ehdr(int fd, Elf64_Ehdr* hdr)
 {
     assert(hdr != NULL);
     ssize_t n = read(fd, (void*)hdr, sizeof(Elf64_Ehdr));
@@ -67,7 +88,7 @@ check_if_valid_elf(Elf64_Ehdr* hdr)
 }
 
 void
-print_elf_hdr(Elf64_Ehdr* hdr)
+print_elf_ehdr(Elf64_Ehdr* hdr)
 {
     assert(hdr != NULL);
 
@@ -86,7 +107,7 @@ print_elf_hdr(Elf64_Ehdr* hdr)
     printf("EI_PAD        = %-d\n", hdr->e_ident[EI_PAD]);
     printf("EI_NIDENT     = %-d\n", hdr->e_ident[EI_NIDENT]);
     printf("e_type        = %-s\n", e_type[hdr->e_type]);
-    printf("e_machine     = %-s\n", e_machine[hdr->e_machine]);
+    //printf("e_machine     = %-s\n", e_machine[hdr->e_machine]);
     printf("e_version     = %-s\n", e_version[hdr->e_version]);
     printf("e_entry       = 0x%08x\n", (int)hdr->e_entry);
     printf("e_ehsize      = 0x%x\n", hdr->e_ehsize);
@@ -101,10 +122,115 @@ print_elf_hdr(Elf64_Ehdr* hdr)
 
 }
 
+void
+read_elf_phdr(int fd, Elf64_Phdr* phdr, Elf64_Ehdr* ehdr)
+{
+    assert(phdr != NULL);
+    off_t off = lseek(fd, ehdr->e_phoff, SEEK_SET);
+    assert(off == (off_t)ehdr->e_phoff);
+
+    for(size_t i = 0; i < ehdr->e_phnum; ++i) {
+        size_t n = read(fd, (void*)(&phdr[i]), sizeof(Elf64_Phdr));
+        assert(n == ehdr->e_phentsize);
+    }
+}
+
+void
+print_elf_phdr(Elf64_Phdr* phdr, Elf64_Ehdr* ehdr)
+{
+    assert(phdr != NULL && ehdr != NULL);
+
+    printf("Program Header:\n");
+    printf("Type : %s\n", p_type[phdr->p_type]);
+    printf("Offset : %lu\n", phdr->p_offset);
+    printf("Virtual Address : 0x%x\n", (int)phdr->p_vaddr);
+    printf("Physical Address : 0x%x\n", (int)phdr->p_paddr);
+    printf("File Size : %lu\n", phdr->p_filesz);
+    printf("Memory Size : %lu\n", phdr->p_memsz);
+
+    //flags
+    char flags[16];
+    uint32_t flag = phdr->p_flags;
+    if(flag & 0x01)
+    {
+        strcat(flags, "PF_X ");
+    }
+    if(flag & 0x02)
+    {
+        strcat(flags, "PF_W ");
+    }
+    if(flag & 0x04)
+    {
+        strcat(flags, "PF_R ");
+    }
+    printf("Flags : %s\n", flags);
+    printf("Align : %lu\n", phdr->p_align);
+}
+
+void
+read_elf_shdr(int fd, Elf64_Shdr* shdr, Elf64_Ehdr* ehdr)
+{
+    assert(shdr != NULL);
+    assert(ehdr != NULL);
+
+    off_t off = lseek(fd, ehdr->e_shoff, SEEK_SET);
+    assert(off == ehdr->e_shoff);
+
+    for(size_t i = 0; i < ehdr->e_shnum; i++)
+    {
+        size_t n = read(fd, (void*)(&shdr[i]), sizeof(Elf64_Shdr));
+        assert(n == ehdr->e_shentsize);
+    }
+}
+
+void
+print_elf_shdr(Elf64_Shdr* shdr, Elf64_Ehdr* ehdr)
+{
+    assert(shdr != NULL);
+    assert(ehdr != NULL);
+
+    printf("Section Header :\n");
+    printf("Name : %u\n", shdr->sh_name);
+    printf("Type : %s\n", sh_type[shdr->sh_type]);
+    
+    char flag[49];
+    uint32_t flags = shdr->sh_flags;
+    if(flags ==0)
+        goto xxx;
+    if(flags & SHF_WRITE)
+    {
+        strcat(flag, "SHF_WRITE ");
+    }
+    if(flags & SHF_ALLOC)
+    {
+        strcat(flag, "SHF_ALLOC ");
+    }
+    if(flags & SHF_EXECINSTR)
+    {
+        strcat(flag, "SHF_EXECINSTR ");
+    }
+    if(flags & SHF_MASKPROC)
+    {
+        strcat(flag, "SHF_MASKPROC ");
+    }
+    printf("Flag = %s\n", flag);
+    xxx:
+        printf("Flag = %d\n", flags);
+
+    printf("Address : 0x%x\n", (int)shdr->sh_addr);
+    printf("Offset : %lu\n", shdr->sh_offset);
+    printf("Size : %lu\n", shdr->sh_size);
+    printf("Link : %u\n", shdr->sh_link);
+    printf("Info : %u\n", shdr->sh_info);
+    printf("Align : %lu\n", shdr->sh_addralign);
+    printf("Entsize : %lu\n", shdr->sh_entsize);
+}
+
+
 int main(int argc, char** argv)
 {
     int fd;
-    Elf64_Ehdr hdr;
+    Elf64_Ehdr ehdr;
 
     if(argc < 2)
     {
@@ -123,9 +249,9 @@ int main(int argc, char** argv)
         std::cout << "Open elf file [" << argv[1] << "] correctly." << std::endl;
     }
 
-    read_elf_phdr(fd, &hdr);   
+    read_elf_ehdr(fd, &ehdr);   
     
-    bool checker = check_if_valid_elf(&hdr);
+    bool checker = check_if_valid_elf(&ehdr);
     if(checker)
     {
         std::cout << "This is a valid elf file." << std::endl;
@@ -135,6 +261,30 @@ int main(int argc, char** argv)
         std::cout << "This is a invalid elf file!" << std::endl;
         exit(-1);
     }
+    print_elf_ehdr(&ehdr);
 
-    print_elf_hdr(&hdr);
+    //program header
+    Elf64_Phdr* phdr = (Elf64_Phdr*)malloc(ehdr.e_phnum * ehdr.e_phentsize);
+    if(phdr != NULL)
+    {
+        read_elf_phdr(fd, phdr, &ehdr);
+        print_elf_phdr(phdr, &ehdr);
+    }
+    else
+    {
+        printf("Program Header : Failed to malloc %d bytes\n", (int)(ehdr.e_phnum * ehdr.e_phentsize));
+        exit(-1);
+    }
+
+    //section header
+    Elf64_Shdr* shdr = (Elf64_Shdr*)malloc(ehdr.e_shnum * ehdr.e_shentsize);
+    if(shdr != NULL)
+    {
+        read_elf_shdr(fd, shdr, &ehdr);
+        print_elf_shdr(shdr, &ehdr);
+    }
+    else
+    {
+        printf("Section Header : Failed to malloc %d bytes\n", (ehdr.e_shnum * ehdr.e_shentsize));
+    }
 }
