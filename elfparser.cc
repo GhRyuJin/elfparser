@@ -107,7 +107,7 @@ print_elf_ehdr(Elf64_Ehdr* hdr)
     printf("EI_PAD        = %-d\n", hdr->e_ident[EI_PAD]);
     printf("EI_NIDENT     = %-d\n", hdr->e_ident[EI_NIDENT]);
     printf("e_type        = %-s\n", e_type[hdr->e_type]);
-    //printf("e_machine     = %-s\n", e_machine[hdr->e_machine]);
+    printf("e_machine     = %-u\n", hdr->e_machine);
     printf("e_version     = %-s\n", e_version[hdr->e_version]);
     printf("e_entry       = 0x%08x\n", (int)hdr->e_entry);
     printf("e_ehsize      = 0x%x\n", hdr->e_ehsize);
@@ -118,8 +118,16 @@ print_elf_ehdr(Elf64_Ehdr* hdr)
     printf("e_phum        = %d\n",   hdr->e_phnum);
     printf("e_shentsize   = %d\n",   hdr->e_shentsize);
     printf("e_shnum       = %d\n",   hdr->e_shnum);
-    printf("e_shstrndx    = %-s\n",  e_shstrndx[hdr->e_shstrndx]);
-
+    printf("e_shstrndx    = 0x%x\n", hdr->e_shstrndx);
+    /*
+    std::cout << "0-" << SHN_LOPROC << std::endl;
+    std::cout << "1" << SHN_UNDEF << std::endl;
+    std::cout << "2" << SHN_LORESERVE << std::endl;
+    std::cout << "3" << SHN_HIPROC << std::endl;
+    std::cout << "4" << SHN_ABS << std::endl;
+    std::cout << "5" << SHN_COMMON << std::endl;
+    std::cout << "6" << SHN_HIRESERVE << std::endl;
+    */
 }
 
 void
@@ -140,31 +148,42 @@ print_elf_phdr(Elf64_Phdr* phdr, Elf64_Ehdr* ehdr)
 {
     assert(phdr != NULL && ehdr != NULL);
 
-    printf("Program Header:\n");
-    printf("Type : %s\n", p_type[phdr->p_type]);
-    printf("Offset : %lu\n", phdr->p_offset);
-    printf("Virtual Address : 0x%x\n", (int)phdr->p_vaddr);
-    printf("Physical Address : 0x%x\n", (int)phdr->p_paddr);
-    printf("File Size : %lu\n", phdr->p_filesz);
-    printf("Memory Size : %lu\n", phdr->p_memsz);
+    printf("************ Program Header ************\n");
 
-    //flags
-    char flags[16];
-    uint32_t flag = phdr->p_flags;
-    if(flag & 0x01)
-    {
-        strcat(flags, "PF_X ");
+    std::cout << "program header num =  " << ehdr->e_phnum << std::endl;
+
+    for(size_t i = 0; i < ehdr->e_phnum; ++i) {
+        Elf64_Phdr *phdr_ = &phdr[i];    
+        printf("\n"); 
+        
+        /*
+        */
+        printf("Type                : %u\n", phdr_->p_type);//p_type[phdr_->p_type]);
+        printf("Offset              : %lu\n", phdr_->p_offset);
+        printf("Virtual Address     : 0x%x\n", (int)phdr_->p_vaddr);
+        printf("Physical Address    : 0x%x\n", (int)phdr_->p_paddr);
+        printf("File Size           : %lu\n", phdr_->p_filesz);
+        printf("Memory Size         : %lu\n", phdr_->p_memsz);
+        //flags
+        /*char flags[16];
+        uint32_t flag = phdr_->p_flags;
+        if(flag & 0x01)
+        {
+            strcat(flags, "PF_X ");
+        }
+        if(flag & 0x02)
+        {
+            strcat(flags, "PF_W ");
+        }
+        if(flag & 0x04)
+        {
+            strcat(flags, "PF_R ");
+        }
+        */
+
+        printf("Flags               : %u\n",  phdr_->p_flags);
+        printf("Align               : %lu\n", phdr_->p_align);
     }
-    if(flag & 0x02)
-    {
-        strcat(flags, "PF_W ");
-    }
-    if(flag & 0x04)
-    {
-        strcat(flags, "PF_R ");
-    }
-    printf("Flags : %s\n", flags);
-    printf("Align : %lu\n", phdr->p_align);
 }
 
 void
@@ -189,9 +208,9 @@ print_elf_shdr(Elf64_Shdr* shdr, Elf64_Ehdr* ehdr)
     assert(shdr != NULL);
     assert(ehdr != NULL);
 
-    printf("Section Header :\n");
-    printf("Name : %u\n", shdr->sh_name);
-    printf("Type : %s\n", sh_type[shdr->sh_type]);
+    printf("************ Section Header ************\n");
+    printf("Name                : %u\n", shdr->sh_name);
+    printf("Type                : %s\n", sh_type[shdr->sh_type]);
     
     char flag[49];
     uint32_t flags = shdr->sh_flags;
@@ -213,19 +232,18 @@ print_elf_shdr(Elf64_Shdr* shdr, Elf64_Ehdr* ehdr)
     {
         strcat(flag, "SHF_MASKPROC ");
     }
-    printf("Flag = %s\n", flag);
+    printf("Flag                : %s\n", flag);
     xxx:
-        printf("Flag = %d\n", flags);
+    printf("Flag                : %d\n", flags);
 
-    printf("Address : 0x%x\n", (int)shdr->sh_addr);
-    printf("Offset : %lu\n", shdr->sh_offset);
-    printf("Size : %lu\n", shdr->sh_size);
-    printf("Link : %u\n", shdr->sh_link);
-    printf("Info : %u\n", shdr->sh_info);
-    printf("Align : %lu\n", shdr->sh_addralign);
-    printf("Entsize : %lu\n", shdr->sh_entsize);
+    printf("Address             : 0x%x\n", (int)shdr->sh_addr);
+    printf("Offset              : %lu\n", shdr->sh_offset);
+    printf("Size                : %lu\n", shdr->sh_size);
+    printf("Link                : %u\n", shdr->sh_link);
+    printf("Info                : %u\n", shdr->sh_info);
+    printf("Align               : %lu\n", shdr->sh_addralign);
+    printf("Entsize             : %lu\n", shdr->sh_entsize);
 }
-
 
 int main(int argc, char** argv)
 {
